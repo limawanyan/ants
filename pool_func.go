@@ -31,42 +31,56 @@ import (
 	"github.com/panjf2000/ants/v2/internal"
 )
 
+// PoolWithFunc 接收来自客户端的任务
+// 它通过回收 goroutines 将 goroutines 的总数限制在给定的数量
 // PoolWithFunc accepts the tasks from client,
 // it limits the total of goroutines to a given number by recycling goroutines.
 type PoolWithFunc struct {
+	// 池容量
 	// capacity of the pool.
 	capacity int32
 
+	// 当前运行的协程数量
 	// running is the number of the currently running goroutines.
 	running int32
 
+	// 保护工作队列锁
 	// lock for protecting the worker queue.
 	lock sync.Locker
 
+	// 存储可用的任务切片
 	// workers is a slice that store the available workers.
 	workers []*goWorkerWithFunc
 
+	// 用于通知池自行关闭
 	// state is used to notice the pool to closed itself.
 	state int32
 
+	// 等待获取一个空闲工人
 	// cond for waiting to get an idle worker.
 	cond *sync.Cond
 
+	// 处理任务函数
 	// poolFunc is the function for processing tasks.
 	poolFunc func(interface{})
 
+	// function:retrieveWorker中加速获取可工作的任务
 	// workerCache speeds up the obtainment of a usable worker in function:retrieveWorker.
 	workerCache sync.Pool
 
+	// pool.Invoke()上已经被阻塞的 goroutine 的数量,由 pool.lock 保护
 	// waiting is the number of the goroutines already been blocked on pool.Invoke(), protected by pool.lock
 	waiting int32
 
+	// 心跳完成
 	heartbeatDone int32
+	// 停止心跳
 	stopHeartbeat context.CancelFunc
 
 	options *Options
 }
 
+// 定期清除在单个 goroutine 中运行的过期工作人员，作为清道夫
 // purgePeriodically clears expired workers periodically which runs in an individual goroutine, as a scavenger.
 func (p *PoolWithFunc) purgePeriodically(ctx context.Context) {
 	heartbeat := time.NewTicker(p.options.ExpiryDuration)
@@ -103,6 +117,8 @@ func (p *PoolWithFunc) purgePeriodically(ctx context.Context) {
 		}
 		p.lock.Unlock()
 
+		// 通知过时的工人停止工作。
+		// 此通知必须在 p.lock 之外,因为 w.task 可能会阻塞，并且如果许多工作人员位于非本地 CPU 上,则可能会消耗大量时间。
 		// Notify obsolete workers to stop.
 		// This notification must be outside the p.lock, since w.task
 		// may be blocking and may consume a lot of time if many workers
@@ -112,6 +128,8 @@ func (p *PoolWithFunc) purgePeriodically(ctx context.Context) {
 			expiredWorkers[i] = nil
 		}
 
+		// 能存在所有工作人员都已清理的情况（没有工作人员正在运行），
+		// 或者池容量已调整的另一种情况，而一些调用者仍然卡在“p.cond.Wait()”中，然后它应该唤醒所有那些调用者。
 		// There might be a situation where all workers have been cleaned up(no worker is running),
 		// or another case where the pool capacity has been Tuned up,
 		// while some invokers still get stuck in "p.cond.Wait()",
@@ -122,6 +140,7 @@ func (p *PoolWithFunc) purgePeriodically(ctx context.Context) {
 	}
 }
 
+// NewPoolWithFunc 生成具有特定功能的蚂蚁池实例
 // NewPoolWithFunc generates an instance of ants pool with a specific function.
 func NewPoolWithFunc(size int, pf func(interface{}), options ...Option) (*PoolWithFunc, error) {
 	if size <= 0 {
@@ -164,6 +183,7 @@ func NewPoolWithFunc(size int, pf func(interface{}), options ...Option) (*PoolWi
 	}
 	p.cond = sync.NewCond(p.lock)
 
+	// 启动一个协程定期清理过期的工作
 	// Start a goroutine to clean up expired workers periodically.
 	var ctx context.Context
 	ctx, p.stopHeartbeat = context.WithCancel(context.Background())
@@ -174,8 +194,11 @@ func NewPoolWithFunc(size int, pf func(interface{}), options ...Option) (*PoolWi
 
 //---------------------------------------------------------------------------
 
+// Invoke 向池提交任务
 // Invoke submits a task to pool.
 //
+// 请注意，您可以从当前 Pool.Invoke() 调用 Pool.Invoke()，但需要特别注意的是，一旦当前 Pool 用完，
+// 您将被最新的 Pool.Invoke() 调用阻塞容量，为避免这种情况，您应该使用 ants.WithNonblocking(true) 实例化 PoolWithFunc。
 // Note that you are allowed to call Pool.Invoke() from the current Pool.Invoke(),
 // but what calls for special attention is that you will get blocked with the latest
 // Pool.Invoke() call once the current Pool runs out of its capacity, and to avoid this,
@@ -192,11 +215,13 @@ func (p *PoolWithFunc) Invoke(args interface{}) error {
 	return nil
 }
 
+// Running 返回当前正在运行的工作人员的数量
 // Running returns the number of workers currently running.
 func (p *PoolWithFunc) Running() int {
 	return int(atomic.LoadInt32(&p.running))
 }
 
+// Free 返回可用的 goroutines 的数量，-1 表示这个池是无限的
 // Free returns the number of available goroutines to work, -1 indicates this pool is unlimited.
 func (p *PoolWithFunc) Free() int {
 	c := p.Cap()
@@ -206,16 +231,19 @@ func (p *PoolWithFunc) Free() int {
 	return c - p.Running()
 }
 
+// Waiting 返回等待执行的任务数
 // Waiting returns the number of tasks which are waiting be executed.
 func (p *PoolWithFunc) Waiting() int {
 	return int(atomic.LoadInt32(&p.waiting))
 }
 
+// Cap 返回此池的容量
 // Cap returns the capacity of this pool.
 func (p *PoolWithFunc) Cap() int {
 	return int(atomic.LoadInt32(&p.capacity))
 }
 
+// Tune 改变这个池的容量，注意对无限或预分配池无效
 // Tune changes the capacity of this pool, note that it is noneffective to the infinite or pre-allocation pool.
 func (p *PoolWithFunc) Tune(size int) {
 	capacity := p.Cap()
@@ -232,11 +260,13 @@ func (p *PoolWithFunc) Tune(size int) {
 	}
 }
 
+// IsClosed 指示池是否关闭
 // IsClosed indicates whether the pool is closed.
 func (p *PoolWithFunc) IsClosed() bool {
 	return atomic.LoadInt32(&p.state) == CLOSED
 }
 
+// Release 关闭此池并释放工作队列
 // Release closes this pool and releases the worker queue.
 func (p *PoolWithFunc) Release() {
 	if !atomic.CompareAndSwapInt32(&p.state, OPENED, CLOSED) {
@@ -249,11 +279,13 @@ func (p *PoolWithFunc) Release() {
 	}
 	p.workers = nil
 	p.lock.Unlock()
+	// 可能有一些调用者在retrieveWorker()中等待，所以我们需要唤醒它们以防止那些调用者无限阻塞
 	// There might be some callers waiting in retrieveWorker(), so we need to wake them up to prevent
 	// those callers blocking infinitely.
 	p.cond.Broadcast()
 }
 
+// ReleaseTimeout 与 Release 类似，但有超时，它会在超时之前等待所有工作人员退出
 // ReleaseTimeout is like Release but with a timeout, it waits all workers to exit before timing out.
 func (p *PoolWithFunc) ReleaseTimeout(timeout time.Duration) error {
 	if p.IsClosed() || p.stopHeartbeat == nil {
@@ -274,6 +306,7 @@ func (p *PoolWithFunc) ReleaseTimeout(timeout time.Duration) error {
 	return ErrTimeout
 }
 
+// Reboot 重新启动一个关闭的池
 // Reboot reboots a closed pool.
 func (p *PoolWithFunc) Reboot() {
 	if atomic.CompareAndSwapInt32(&p.state, CLOSED, OPENED) {
@@ -356,6 +389,7 @@ func (p *PoolWithFunc) retrieveWorker() (w *goWorkerWithFunc) {
 	return
 }
 
+// revertWorker 将一个工人放回空闲池,回收 goroutines
 // revertWorker puts a worker back into free pool, recycling the goroutines.
 func (p *PoolWithFunc) revertWorker(worker *goWorkerWithFunc) bool {
 	if capacity := p.Cap(); (capacity > 0 && p.Running() > capacity) || p.IsClosed() {

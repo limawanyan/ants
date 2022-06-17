@@ -27,20 +27,26 @@ import (
 	"time"
 )
 
+// goWorker 运行任务的实际执行者
+// 它启动一个接受任务并执行函数调用的 goroutine
 // goWorker is the actual executor who runs the tasks,
 // it starts a goroutine that accepts tasks and
 // performs function calls.
 type goWorker struct {
+	// pool 谁拥有这个工作任务
 	// pool who owns this worker.
 	pool *Pool
 
+	// task 应该执行的工作
 	// task is a job should be done.
 	task chan func()
 
+	// recycleTime 将工作人员放回队列时会更新
 	// recycleTime will be updated when putting a worker back into queue.
 	recycleTime time.Time
 }
 
+// run 启动一个 goroutine 以重复执行函数调用的过程
 // run starts a goroutine to repeat the process
 // that performs the function calls.
 func (w *goWorker) run() {

@@ -31,31 +31,40 @@ import (
 	"github.com/panjf2000/ants/v2/internal"
 )
 
+// Pool 接受来自客户端的任务，它通过回收 goroutines 将 goroutines 的总数限制在给定的数量
 // Pool accepts the tasks from client, it limits the total of goroutines to a given number by recycling goroutines.
 type Pool struct {
+	// 容量
 	// capacity of the pool, a negative value means that the capacity of pool is limitless, an infinite pool is used to
 	// avoid potential issue of endless blocking caused by nested usage of a pool: submitting a task to pool
 	// which submits a new task to the same pool.
 	capacity int32
 
+	// 正在运行的协程数量
 	// running is the number of the currently running goroutines.
 	running int32
 
+	// 队列锁
 	// lock for protecting the worker queue.
 	lock sync.Locker
 
+	// 可用工作队列切片
 	// workers is a slice that store the available workers.
 	workers workerArray
 
+	// 状态,用于通知池自行关闭
 	// state is used to notice the pool to closed itself.
 	state int32
 
+	// 等待获取一个空闲的工作
 	// cond for waiting to get an idle worker.
 	cond *sync.Cond
 
+	// 加速获取可用的工作
 	// workerCache speeds up the obtainment of a usable worker in function:retrieveWorker.
 	workerCache sync.Pool
 
+	// pool.Submit()上被阻塞的协程数量,由pool.lock保护
 	// waiting is the number of goroutines already been blocked on pool.Submit(), protected by pool.lock
 	waiting int32
 
@@ -65,6 +74,7 @@ type Pool struct {
 	options *Options
 }
 
+// 定期清楚过期的协程
 // purgePeriodically clears expired workers periodically which runs in an individual goroutine, as a scavenger.
 func (p *Pool) purgePeriodically(ctx context.Context) {
 	heartbeat := time.NewTicker(p.options.ExpiryDuration)
@@ -107,6 +117,7 @@ func (p *Pool) purgePeriodically(ctx context.Context) {
 	}
 }
 
+// NewPool 实例化一个池
 // NewPool generates an instance of ants pool.
 func NewPool(size int, options ...Option) (*Pool, error) {
 	opts := loadOptions(options...)
@@ -175,11 +186,13 @@ func (p *Pool) Submit(task func()) error {
 	return nil
 }
 
+// Running 返回正在运行的协程数量
 // Running returns the number of workers currently running.
 func (p *Pool) Running() int {
 	return int(atomic.LoadInt32(&p.running))
 }
 
+// Free 返回可用协程数量,-1代表无限制
 // Free returns the number of available goroutines to work, -1 indicates this pool is unlimited.
 func (p *Pool) Free() int {
 	c := p.Cap()

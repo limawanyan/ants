@@ -2,6 +2,7 @@ package ants
 
 import "time"
 
+// 循环队列
 type loopQueue struct {
 	items  []*goWorker
 	expiry []*goWorker
@@ -11,6 +12,7 @@ type loopQueue struct {
 	isFull bool
 }
 
+// 实例化一个循环队列
 func newWorkerLoopQueue(size int) *loopQueue {
 	return &loopQueue{
 		items: make([]*goWorker, size),
@@ -18,6 +20,7 @@ func newWorkerLoopQueue(size int) *loopQueue {
 	}
 }
 
+// 长度
 func (wq *loopQueue) len() int {
 	if wq.size == 0 {
 		return 0
@@ -37,10 +40,12 @@ func (wq *loopQueue) len() int {
 	return wq.size - wq.head + wq.tail
 }
 
+// 是否为空
 func (wq *loopQueue) isEmpty() bool {
 	return wq.head == wq.tail && !wq.isFull
 }
 
+// 新增
 func (wq *loopQueue) insert(worker *goWorker) error {
 	if wq.size == 0 {
 		return errQueueIsReleased
@@ -62,6 +67,7 @@ func (wq *loopQueue) insert(worker *goWorker) error {
 	return nil
 }
 
+// 分离
 func (wq *loopQueue) detach() *goWorker {
 	if wq.isEmpty() {
 		return nil
@@ -78,6 +84,7 @@ func (wq *loopQueue) detach() *goWorker {
 	return w
 }
 
+// 检索到期
 func (wq *loopQueue) retrieveExpiry(duration time.Duration) []*goWorker {
 	expiryTime := time.Now().Add(-duration)
 	index := wq.binarySearch(expiryTime)
@@ -110,6 +117,7 @@ func (wq *loopQueue) retrieveExpiry(duration time.Duration) []*goWorker {
 	return wq.expiry
 }
 
+// 二进制搜索
 func (wq *loopQueue) binarySearch(expiryTime time.Time) int {
 	var mid, nlen, basel, tmid int
 	nlen = len(wq.items)
@@ -147,6 +155,7 @@ func (wq *loopQueue) binarySearch(expiryTime time.Time) int {
 	return (r + basel + nlen) % nlen
 }
 
+// 重置
 func (wq *loopQueue) reset() {
 	if wq.isEmpty() {
 		return

@@ -27,20 +27,25 @@ import (
 	"time"
 )
 
+// goWorkerWithFunc 是运行任务的实际执行者，它启动一个接受任务并执行函数调用的 goroutine
 // goWorkerWithFunc is the actual executor who runs the tasks,
 // it starts a goroutine that accepts tasks and
 // performs function calls.
 type goWorkerWithFunc struct {
+	// pool 拥有该工作任务的池
 	// pool who owns this worker.
 	pool *PoolWithFunc
 
+	// args 应该要完成的工作
 	// args is a job should be done.
 	args chan interface{}
 
+	// recycleTime 工作人员放回队列时将更新
 	// recycleTime will be updated when putting a worker back into queue.
 	recycleTime time.Time
 }
 
+// run 启动一个 goroutine 以重复执行函数调用的过程
 // run starts a goroutine to repeat the process
 // that performs the function calls.
 func (w *goWorkerWithFunc) run() {
@@ -59,6 +64,7 @@ func (w *goWorkerWithFunc) run() {
 					w.pool.options.Logger.Printf("worker with func exits from panic: %s\n", string(buf[:n]))
 				}
 			}
+			// Call 在这里调用 Signal() 以防有 goroutines 等待可用的工作
 			// Call Signal() here in case there are goroutines waiting for available workers.
 			w.pool.cond.Signal()
 		}()

@@ -2,12 +2,14 @@ package ants
 
 import "time"
 
+// 工作栈
 type workerStack struct {
 	items  []*goWorker
 	expiry []*goWorker
 	size   int
 }
 
+// 实例化工作栈
 func newWorkerStack(size int) *workerStack {
 	return &workerStack{
 		items: make([]*goWorker, 0, size),
@@ -15,19 +17,23 @@ func newWorkerStack(size int) *workerStack {
 	}
 }
 
+// 数量
 func (wq *workerStack) len() int {
 	return len(wq.items)
 }
 
+// 是否为空
 func (wq *workerStack) isEmpty() bool {
 	return len(wq.items) == 0
 }
 
+// 插入
 func (wq *workerStack) insert(worker *goWorker) error {
 	wq.items = append(wq.items, worker)
 	return nil
 }
 
+// 删除
 func (wq *workerStack) detach() *goWorker {
 	l := wq.len()
 	if l == 0 {
@@ -41,6 +47,7 @@ func (wq *workerStack) detach() *goWorker {
 	return w
 }
 
+// 检索到期
 func (wq *workerStack) retrieveExpiry(duration time.Duration) []*goWorker {
 	n := wq.len()
 	if n == 0 {
@@ -62,6 +69,7 @@ func (wq *workerStack) retrieveExpiry(duration time.Duration) []*goWorker {
 	return wq.expiry
 }
 
+// 二分搜索
 func (wq *workerStack) binarySearch(l, r int, expiryTime time.Time) int {
 	var mid int
 	for l <= r {
@@ -75,6 +83,7 @@ func (wq *workerStack) binarySearch(l, r int, expiryTime time.Time) int {
 	return r
 }
 
+// 重置
 func (wq *workerStack) reset() {
 	for i := 0; i < wq.len(); i++ {
 		wq.items[i].task <- nil
