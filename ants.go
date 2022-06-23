@@ -32,17 +32,21 @@ import (
 )
 
 const (
+	// DefaultAntsPoolSize goroutine 池的默认容量
 	// DefaultAntsPoolSize is the default capacity for a default goroutine pool.
 	DefaultAntsPoolSize = math.MaxInt32
 
+	// DefaultCleanIntervalTime 清理 goroutine 的间隔时间
 	// DefaultCleanIntervalTime is the interval time to clean up goroutines.
 	DefaultCleanIntervalTime = time.Second
 )
 
 const (
+	// OPENED 表示池已经打开
 	// OPENED represents that the pool is opened.
 	OPENED = iota
 
+	// CLOSED 表示池已经关闭
 	// CLOSED represents that the pool is closed.
 	CLOSED
 )
@@ -51,21 +55,27 @@ var (
 	//
 	//--------------------------Error types for the Ants API------------------------------
 
+	// ErrLackPoolFunc 当调用者不为池提供函数时将返回
 	// ErrLackPoolFunc will be returned when invokers don't provide function for pool.
 	ErrLackPoolFunc = errors.New("must provide function for pool")
 
+	// ErrInvalidPoolExpiry 清除goroutine周期性持续时间设置为负数时将返回
 	// ErrInvalidPoolExpiry will be returned when setting a negative number as the periodic duration to purge goroutines.
 	ErrInvalidPoolExpiry = errors.New("invalid expiry for pool")
 
+	// ErrPoolClosed 将任务提交到已经关闭的池返回
 	// ErrPoolClosed will be returned when submitting task to a closed pool.
 	ErrPoolClosed = errors.New("this pool has been closed")
 
+	// ErrPoolOverload 当池已满且没有可用的工人时将返回
 	// ErrPoolOverload will be returned when the pool is full and no workers available.
 	ErrPoolOverload = errors.New("too many goroutines blocked on submit or Nonblocking is set")
 
+	// ErrInvalidPreAllocSize 在 PreAlloc 模式下尝试设置负容量时返回
 	// ErrInvalidPreAllocSize will be returned when trying to set up a negative capacity under PreAlloc mode.
 	ErrInvalidPreAllocSize = errors.New("can not set up a negative capacity under PreAlloc mode")
 
+	// ErrTimeout 操作超时返回
 	// ErrTimeout will be returned after the operations timed out.
 	ErrTimeout = errors.New("operation timed out")
 
